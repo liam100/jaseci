@@ -1,3 +1,5 @@
+import {*} with "./tesla_ai.jac";
+
 node cai_state {
     has name;
     can init_wlk_ctx {

@@ -1,36 +1,40 @@
+import {*} with "./tfm_ner.jac";
+import {*} with "./ai_model.jac";
+import {*} with "./faq.jac";
+
 node dialogue_root;
 
-node cai_state {
-    has name;
-    can init_wlk_ctx {
-        new_wlk_ctx = {
-            "intent": null,
-            "entities": {},
-            "prev_state": null,
-            "next_state": null,
-            "respond": false
-        };
-        if ("entities" in visitor.wlk_ctx) {
-            // Carry over extracted entities from previous interaction
-            new_wlk_ctx["entities"] = visitor.wlk_ctx["entities"];
-        }
-        visitor.wlk_ctx = new_wlk_ctx;
-    }
-    can nlu {}
-    can process {
-        if (visitor.wlk_ctx["prev_state"]): visitor.wlk_ctx["respond"] = true;
-        else {
-            visitor.wlk_ctx["next_state"] = net.root();
-            visitor.wlk_ctx["prev_state"] = here;
-        }
-    }
-    can nlg {}
-}
+// node cai_state {
+//     has name;
+//     can init_wlk_ctx {
+//         new_wlk_ctx = {
+//             "intent": null,
+//             "entities": {},
+//             "prev_state": null,
+//             "next_state": null,
+//             "respond": false
+//         };
+//         if ("entities" in visitor.wlk_ctx) {
+//             // Carry over extracted entities from previous interaction
+//             new_wlk_ctx["entities"] = visitor.wlk_ctx["entities"];
+//         }
+//         visitor.wlk_ctx = new_wlk_ctx;
+//     }
+//     can nlu {}
+//     can process {
+//         if (visitor.wlk_ctx["prev_state"]): visitor.wlk_ctx["respond"] = true;
+//         else {
+//             visitor.wlk_ctx["next_state"] = net.root();
+//             visitor.wlk_ctx["prev_state"] = here;
+//         }
+//     }
+//     can nlg {}
+// }
 
 walker init {
     root {
         spawn here ++> graph::tesla_ai;
-        spawn here walker::talk;
+        // spawn here walker::talk;
     }
 }
 
@@ -198,22 +202,35 @@ graph tesla_ai {
 }
 
 walker talk {
-    has question;
-    has wlk_ctx = {};
+    has question, interactive = false;
+    has wlk_ctx = {
+        "intent": null,
+        "entities": {},
+        "prev_state": null,
+        "next_state": null,
+        "respond": false
+    };
     has response;
     root {
         take --> node::dialogue_root;
     }
     cai_state {
-        if (!question) {
+        if (!question and interactive) {
             question = std.input("Question (Ctrl-C to exit)> ");
             here::init_wlk_ctx;
+        } elif (!question and !interactive){
+            std.err("ERROR: question is required for non-interactive mode");
+            disengage;
         }
         here::nlu;
         here::process;
         if (visitor.wlk_ctx["respond"]) {
             here::nlg;
-            std.out(response);
+            if (interactive): std.out(response);
+            else {
+                yield report response;
+                here::init_wlk_ctx;
+            }
             question = null;
             take here;
         } else {
